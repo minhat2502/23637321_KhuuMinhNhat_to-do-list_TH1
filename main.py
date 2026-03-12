@@ -1,11 +1,19 @@
 from fastapi import FastAPI
+from core.config import settings
+from routers.todo_router import router as todo_router
+from db.session import engine
+from db import models
 
-app = FastAPI(title="To-Do List API", version="0.1.0")
+models.Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG)
+
+app.include_router(todo_router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/")
 def root():
-    return {"message": "Chào mừng đến với To-Do List API!"}
+    return {"message": f"Chào mừng đến với {settings.APP_NAME}!"}
 
 
 @app.get("/health")
