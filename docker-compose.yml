@@ -1,0 +1,13 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - APP_NAME=To-Do List API
+      - DEBUG=False
+      - API_V1_PREFIX=/api/v1
+      - DATABASE_URL=sqlite:///./data/todos.db
+    restart: unless-stopped

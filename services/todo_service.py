@@ -44,3 +44,11 @@ def complete_todo(db: Session, todo_id: int, owner_id: int) -> Optional[Todo]:
 def delete_todo(db: Session, todo_id: int, owner_id: int) -> bool:
     return todo_repo.delete(db, todo_id, owner_id)
 
+
+def restore_todo(db: Session, todo_id: int, owner_id: int) -> Optional[Todo]:
+    return todo_repo.restore(db, todo_id, owner_id)
+
+
+def get_deleted_todos(db: Session, owner_id: int) -> list[Todo]:
+    return todo_repo.get_deleted(db, owner_id)
+

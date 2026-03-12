@@ -1,5 +1,5 @@
 from typing import Optional
-from datetime import date
+from datetime import date, datetime, timezone
 from sqlalchemy.orm import Session
 from db.models import Todo, Tag
 
@@ -37,7 +37,7 @@ def get_all(
     limit: int,
     offset: int,
 ) -> tuple[list[Todo], int]:
-    query = db.query(Todo).filter(Todo.owner_id == owner_id)
+    query = db.query(Todo).filter(Todo.owner_id == owner_id, Todo.deleted_at == None)
 
     if is_done is not None:
         query = query.filter(Todo.is_done == is_done)
@@ -56,8 +56,8 @@ def get_overdue(db: Session, owner_id: int) -> list[Todo]:
     today = date.today()
     return (
         db.query(Todo)
-        .filter(Todo.owner_id == owner_id, Todo.is_done == False,
-                Todo.due_date != None, Todo.due_date < today)
+        .filter(Todo.owner_id == owner_id, Todo.deleted_at == None,
+                Todo.is_done == False, Todo.due_date != None, Todo.due_date < today)
         .order_by(Todo.due_date.asc())
         .all()
     )
@@ -67,14 +67,25 @@ def get_today(db: Session, owner_id: int) -> list[Todo]:
     today = date.today()
     return (
         db.query(Todo)
-        .filter(Todo.owner_id == owner_id, Todo.is_done == False, Todo.due_date == today)
+        .filter(Todo.owner_id == owner_id, Todo.deleted_at == None,
+                Todo.is_done == False, Todo.due_date == today)
         .order_by(Todo.created_at.asc())
         .all()
     )
 
 
 def get_by_id(db: Session, todo_id: int, owner_id: int) -> Optional[Todo]:
-    return db.query(Todo).filter(Todo.id == todo_id, Todo.owner_id == owner_id).first()
+    return db.query(Todo).filter(Todo.id == todo_id, Todo.owner_id == owner_id,
+                                  Todo.deleted_at == None).first()
+
+
+def get_deleted(db: Session, owner_id: int) -> list[Todo]:
+    return (
+        db.query(Todo)
+        .filter(Todo.owner_id == owner_id, Todo.deleted_at != None)
+        .order_by(Todo.deleted_at.desc())
+        .all()
+    )
 
 
 def update(db: Session, todo_id: int, owner_id: int, title: str, description: Optional[str],
@@ -107,11 +118,25 @@ def patch(db: Session, todo_id: int, owner_id: int, **fields) -> Optional[Todo]:
 
 
 def delete(db: Session, todo_id: int, owner_id: int) -> bool:
+    """Soft delete: đánh dấu deleted_at thay vì xóa thật."""
     todo = get_by_id(db, todo_id, owner_id)
     if todo is None:
         return False
-    db.delete(todo)
+    todo.deleted_at = datetime.now(timezone.utc)
     db.commit()
     return True
+
+
+def restore(db: Session, todo_id: int, owner_id: int) -> Optional[Todo]:
+    """Khôi phục todo đã bị soft delete."""
+    todo = db.query(Todo).filter(
+        Todo.id == todo_id, Todo.owner_id == owner_id, Todo.deleted_at != None
+    ).first()
+    if todo is None:
+        return None
+    todo.deleted_at = None
+    db.commit()
+    db.refresh(todo)
+    return todo
 
 

@@ -41,6 +41,7 @@ class Todo(Base):
     due_date = Column(Date, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    deleted_at = Column(DateTime, nullable=True, default=None)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     owner = relationship("User", back_populates="todos")

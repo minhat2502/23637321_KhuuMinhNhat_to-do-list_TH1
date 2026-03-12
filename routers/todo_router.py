@@ -10,6 +10,11 @@ from core.deps import get_current_user
 router = APIRouter(prefix="/todos", tags=["todos"])
 
 
+@router.get("/deleted", response_model=list[TodoResponse])
+def get_deleted_todos(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return todo_service.get_deleted_todos(db, current_user.id)
+
+
 @router.get("/overdue", response_model=list[TodoResponse])
 def get_overdue(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return todo_service.get_overdue(db, current_user.id)
@@ -73,61 +78,11 @@ def complete_todo(todo_id: int, db: Session = Depends(get_db), current_user: Use
     return todo
 
 
-@router.delete("/{todo_id}", status_code=204)
-def delete_todo(todo_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if not todo_service.delete_todo(db, todo_id, current_user.id):
-        raise HTTPException(status_code=404, detail=f"Todo {todo_id} not found")
-
-
-
-@router.post("", response_model=TodoResponse, status_code=201)
-def create_todo(payload: TodoCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return todo_service.create_todo(db, payload.title, payload.description, payload.is_done, current_user.id)
-
-
-@router.get("", response_model=PaginatedTodos)
-def list_todos(
-    is_done: Optional[bool] = Query(default=None),
-    q: Optional[str] = Query(default=None),
-    sort: str = Query(default="created_at"),
-    limit: int = Query(default=10, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    return todo_service.get_todos(db, current_user.id, is_done, q, sort, limit, offset)
-
-
-@router.get("/{todo_id}", response_model=TodoResponse)
-def get_todo(todo_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    todo = todo_service.get_todo(db, todo_id, current_user.id)
+@router.post("/{todo_id}/restore", response_model=TodoResponse)
+def restore_todo(todo_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    todo = todo_service.restore_todo(db, todo_id, current_user.id)
     if todo is None:
-        raise HTTPException(status_code=404, detail=f"Todo {todo_id} not found")
-    return todo
-
-
-@router.put("/{todo_id}", response_model=TodoResponse)
-def update_todo(todo_id: int, payload: TodoUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    todo = todo_service.update_todo(db, todo_id, current_user.id, payload.title, payload.description, payload.is_done)
-    if todo is None:
-        raise HTTPException(status_code=404, detail=f"Todo {todo_id} not found")
-    return todo
-
-
-@router.patch("/{todo_id}", response_model=TodoResponse)
-def patch_todo(todo_id: int, payload: TodoPatch, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    fields = payload.model_dump(exclude_unset=True)
-    todo = todo_service.patch_todo(db, todo_id, current_user.id, **fields)
-    if todo is None:
-        raise HTTPException(status_code=404, detail=f"Todo {todo_id} not found")
-    return todo
-
-
-@router.post("/{todo_id}/complete", response_model=TodoResponse)
-def complete_todo(todo_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    todo = todo_service.complete_todo(db, todo_id, current_user.id)
-    if todo is None:
-        raise HTTPException(status_code=404, detail=f"Todo {todo_id} not found")
+        raise HTTPException(status_code=404, detail=f"Todo {todo_id} not found in trash")
     return todo
 
 
@@ -136,11 +91,6 @@ def delete_todo(todo_id: int, db: Session = Depends(get_db), current_user: User 
     if not todo_service.delete_todo(db, todo_id, current_user.id):
         raise HTTPException(status_code=404, detail=f"Todo {todo_id} not found")
 
-
-
-@router.post("", response_model=TodoResponse, status_code=201)
-def create_todo(payload: TodoCreate, db: Session = Depends(get_db)):
-    return todo_service.create_todo(db, payload.title, payload.description, payload.is_done)
 
 
 @router.get("", response_model=PaginatedTodos)
