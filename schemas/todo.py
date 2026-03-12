@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 
 
@@ -12,10 +12,19 @@ def _validate_title(v: str) -> str:
     return v
 
 
+class TagResponse(BaseModel):
+    id: int
+    name: str
+
+    model_config = {"from_attributes": True}
+
+
 class TodoCreate(BaseModel):
     title: str
     description: Optional[str] = None
     is_done: bool = False
+    due_date: Optional[date] = None
+    tags: list[str] = []
 
     @field_validator("title")
     @classmethod
@@ -27,6 +36,8 @@ class TodoUpdate(BaseModel):
     title: str
     description: Optional[str] = None
     is_done: bool
+    due_date: Optional[date] = None
+    tags: list[str] = []
 
     @field_validator("title")
     @classmethod
@@ -38,6 +49,8 @@ class TodoPatch(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     is_done: Optional[bool] = None
+    due_date: Optional[date] = None
+    tags: Optional[list[str]] = None
 
     @field_validator("title")
     @classmethod
@@ -52,8 +65,10 @@ class TodoResponse(BaseModel):
     title: str
     description: Optional[str]
     is_done: bool
+    due_date: Optional[date]
     created_at: datetime
     updated_at: datetime
+    tags: list[TagResponse] = []
 
     model_config = {"from_attributes": True}
 

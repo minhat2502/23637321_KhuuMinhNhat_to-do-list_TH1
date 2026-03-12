@@ -1,11 +1,28 @@
 from typing import Optional
+from datetime import date
 from sqlalchemy.orm import Session
-from db.models import Todo
+from db.models import Todo, Tag
 
 
-def create(db: Session, title: str, description: Optional[str], is_done: bool, owner_id: int) -> Todo:
-    todo = Todo(title=title, description=description, is_done=is_done, owner_id=owner_id)
+def _sync_tags(db: Session, todo: Todo, tag_names: list[str]) -> None:
+    tags = []
+    for name in tag_names:
+        name = name.strip().lower()
+        tag = db.query(Tag).filter(Tag.name == name).first()
+        if tag is None:
+            tag = Tag(name=name)
+            db.add(tag)
+        tags.append(tag)
+    todo.tags = tags
+
+
+def create(db: Session, title: str, description: Optional[str], is_done: bool,
+           owner_id: int, due_date: Optional[date] = None, tags: list[str] = []) -> Todo:
+    todo = Todo(title=title, description=description, is_done=is_done,
+                owner_id=owner_id, due_date=due_date)
     db.add(todo)
+    db.flush()
+    _sync_tags(db, todo, tags)
     db.commit()
     db.refresh(todo)
     return todo
@@ -24,32 +41,52 @@ def get_all(
 
     if is_done is not None:
         query = query.filter(Todo.is_done == is_done)
-
     if q:
         query = query.filter(Todo.title.ilike(f"%{q}%"))
 
     total = query.count()
-
     reverse = sort.startswith("-")
     sort_key = sort.lstrip("-")
     order_col = getattr(Todo, sort_key, Todo.created_at)
     query = query.order_by(order_col.desc() if reverse else order_col.asc())
+    return query.offset(offset).limit(limit).all(), total
 
-    items = query.offset(offset).limit(limit).all()
-    return items, total
+
+def get_overdue(db: Session, owner_id: int) -> list[Todo]:
+    today = date.today()
+    return (
+        db.query(Todo)
+        .filter(Todo.owner_id == owner_id, Todo.is_done == False,
+                Todo.due_date != None, Todo.due_date < today)
+        .order_by(Todo.due_date.asc())
+        .all()
+    )
+
+
+def get_today(db: Session, owner_id: int) -> list[Todo]:
+    today = date.today()
+    return (
+        db.query(Todo)
+        .filter(Todo.owner_id == owner_id, Todo.is_done == False, Todo.due_date == today)
+        .order_by(Todo.created_at.asc())
+        .all()
+    )
 
 
 def get_by_id(db: Session, todo_id: int, owner_id: int) -> Optional[Todo]:
     return db.query(Todo).filter(Todo.id == todo_id, Todo.owner_id == owner_id).first()
 
 
-def update(db: Session, todo_id: int, owner_id: int, title: str, description: Optional[str], is_done: bool) -> Optional[Todo]:
+def update(db: Session, todo_id: int, owner_id: int, title: str, description: Optional[str],
+           is_done: bool, due_date: Optional[date] = None, tags: list[str] = []) -> Optional[Todo]:
     todo = get_by_id(db, todo_id, owner_id)
     if todo is None:
         return None
     todo.title = title
     todo.description = description
     todo.is_done = is_done
+    todo.due_date = due_date
+    _sync_tags(db, todo, tags)
     db.commit()
     db.refresh(todo)
     return todo
@@ -59,8 +96,11 @@ def patch(db: Session, todo_id: int, owner_id: int, **fields) -> Optional[Todo]:
     todo = get_by_id(db, todo_id, owner_id)
     if todo is None:
         return None
+    tags = fields.pop("tags", None)
     for key, value in fields.items():
         setattr(todo, key, value)
+    if tags is not None:
+        _sync_tags(db, todo, tags)
     db.commit()
     db.refresh(todo)
     return todo
